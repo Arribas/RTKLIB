@@ -401,7 +401,7 @@ static void *rtksvrthread(void *arg)
     
     /* MOD SyS V message TX*/
     /* create message queue */
-    msgbuf msg_buf;
+    pvt_msgbuf msg_buf;
     int msgsend_size=sizeof(msg_buf.sol);
     msg_buf.mtype=1; /* default message ID */
     int msqid;

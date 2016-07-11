@@ -1253,7 +1253,7 @@ typedef struct {        /* RTK server type */
 typedef struct  {
         long mtype;
         sol_t sol;
-    } msgbuf;
+    } pvt_msgbuf;
 
 /* notes  : rs [(0:2)+i*6]= obs[i] sat position {x,y,z} (m)
 *          rs [(3:5)+i*6]= obs[i] sat velocity {vx,vy,vz} (m/s)
@@ -1269,6 +1269,7 @@ typedef struct {
 
 typedef struct {
         long mtype;
+        int n;
         obsd_t rawobs[MAX_RAW_OBS];
         satpvt_t satpvt;
     } rawobs_msgbuf;
