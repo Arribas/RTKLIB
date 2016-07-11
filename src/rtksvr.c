@@ -26,9 +26,21 @@
 *                            add api rtksvrfree()
 *           2014/06/28  1.9  fix probram on ephemeris update of beidou
 *-----------------------------------------------------------------------------*/
+#include <errno.h>
+#include <time.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+
 #include "rtklib.h"
 
 static const char rcsid[]="$Id:$";
+
+struct msgbuf {
+        long mtype;
+        sol_t sol;
+    };
 
 /* write solution header to output stream ------------------------------------*/
 static void writesolhead(stream_t *stream, const solopt_t *solopt)
@@ -392,6 +404,17 @@ static void *rtksvrthread(void *arg)
     svr->tick=tickget();
     ticknmea=svr->tick-1000;
     
+    /* MOD SyS V message TX*/
+    /* create message queue */
+    struct msgbuf msg_buf;
+    int msgsend_size=sizeof(msg_buf.sol);
+    msg_buf.mtype=1; /* default message ID */
+    int msqid;
+    key_t key=1010;
+    if ((msqid = msgget(key, 0644 | IPC_CREAT)) == -1) {
+        perror("msgget");
+        exit(1);
+    }
     for (cycle=0;svr->state;cycle++) {
         tick=tickget();
         
@@ -444,6 +467,11 @@ static void *rtksvrthread(void *arg)
                 
                 /* write solution */
                 writesol(svr,i);
+		/* SEND SOLUTION OVER A MESSAGE QUEUE */
+	        msg_buf.sol=svr->rtk.sol;
+		/* non-blocking Sys V message send */
+		msgsnd(msqid, &msg_buf, msgsend_size, IPC_NOWAIT);
+            
             }
             /* if cpu overload, inclement obs outage counter and break */
             if ((int)(tickget()-tick)>=svr->cycle) {
@@ -485,6 +513,10 @@ static void *rtksvrthread(void *arg)
     for (i=0;i<2;i++) {
         svr->nsb[i]=0;
         free(svr->sbuf[i]); svr->sbuf[i]=NULL;
+    }
+    /* Free the message queue */
+    if (msgctl(msqid, IPC_RMID, NULL) == -1) {
+        perror("msgctl");
     }
     return 0;
 }
