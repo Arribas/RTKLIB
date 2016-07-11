@@ -17,6 +17,12 @@
 *           2014/05/26 1.4  support galileo and beidou
 *           2015/03/19 1.5  fix bug on ionosphere correction for GLO and BDS
 *-----------------------------------------------------------------------------*/
+#include <errno.h>
+#include <time.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
 #include "rtklib.h"
 
 static const char rcsid[]="$Id:$";
@@ -543,6 +549,9 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
     prcopt_t opt_=*opt;
     double *rs,*dts,*var,*azel_,*resp;
     int i,stat,vsat[MAXOBS]={0},svh[MAXOBS];
+
+    int k,m;
+    rawobs_msgbuf sysv_msg;
     
     sol->stat=SOLQ_NONE;
     
@@ -561,12 +570,42 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
         opt_.ionoopt=IONOOPT_BRDC;
         opt_.tropopt=TROPOPT_SAAS;
     }
+
     /* satellite positons, velocities and clocks */
     satposs(sol->time,obs,n,nav,opt_.sateph,rs,dts,var,svh);
     
     /* estimate receiver position with pseudorange */
     stat=estpos(obs,n,rs,dts,var,svh,nav,&opt_,sol,azel_,vsat,resp,msg);
     
+
+    /* MOD ARRIBAS: Fill Sys V message structures wit raw observables and sat PVTs */
+    for (k=0;k<n;k++)
+    {
+        sysv_msg.rawobs[k]=obs[k];
+        for (m=0;m<6;m++)
+        {
+            sysv_msg.satpvt.rs[k*6+m]=rs[k*6+m];
+        }
+        for (m=0;m<2;m++)
+        {
+            sysv_msg.satpvt.dts[k*2+m]=dts[k*2+m];
+        }
+        sysv_msg.satpvt.svh[k]=svh[k];
+        sysv_msg.satpvt.var[k]=var[k];
+    }
+
+    int msgsend_size=sizeof(sysv_msg.rawobs) + sizeof(sysv_msg.satpvt);
+    sysv_msg.mtype=1; /* default message ID */
+    int msqid;
+    key_t key=1011;
+    if ((msqid = msgget(key, 0644 )) == -1) {
+        perror("msgget");
+    }
+
+    /* SEND SOLUTION OVER A MESSAGE QUEUE */
+    /* non-blocking Sys V message send */
+    msgsnd(msqid, &sysv_msg, msgsend_size, IPC_NOWAIT);
+
     /* raim fde */
     if (!stat&&n>=6&&opt->posopt[4]) {
         stat=raim_fde(obs,n,rs,dts,var,svh,nav,&opt_,sol,azel_,vsat,resp,msg);

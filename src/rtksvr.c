@@ -37,11 +37,6 @@
 
 static const char rcsid[]="$Id:$";
 
-struct msgbuf {
-        long mtype;
-        sol_t sol;
-    };
-
 /* write solution header to output stream ------------------------------------*/
 static void writesolhead(stream_t *stream, const solopt_t *solopt)
 {
@@ -406,12 +401,18 @@ static void *rtksvrthread(void *arg)
     
     /* MOD SyS V message TX*/
     /* create message queue */
-    struct msgbuf msg_buf;
+    msgbuf msg_buf;
     int msgsend_size=sizeof(msg_buf.sol);
     msg_buf.mtype=1; /* default message ID */
     int msqid;
+    int msqid_raw;
     key_t key=1010;
+    key_t key_raw=1011;
     if ((msqid = msgget(key, 0644 | IPC_CREAT)) == -1) {
+        perror("msgget");
+        exit(1);
+    }
+    if ((msqid_raw = msgget(key_raw, 0644 | IPC_CREAT)) == -1) {
         perror("msgget");
         exit(1);
     }
@@ -516,6 +517,10 @@ static void *rtksvrthread(void *arg)
     }
     /* Free the message queue */
     if (msgctl(msqid, IPC_RMID, NULL) == -1) {
+        perror("msgctl");
+    }
+    /* Free the message queue */
+    if (msgctl(msqid_raw, IPC_RMID, NULL) == -1) {
         perror("msgctl");
     }
     return 0;

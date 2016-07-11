@@ -53,6 +53,10 @@ extern "C" {
 #define COPYRIGHT_RTKLIB \
             "Copyright (C) 2007-2015 by T.Takasu\nAll rights reserved."
 
+/* ARRIBAS MOD CONSTANTS */
+
+#define MAX_RAW_OBS 24
+
 #define PI          3.1415926535897932  /* pi */
 #define D2R         (PI/180.0)          /* deg to rad */
 #define R2D         (180.0/PI)          /* rad to deg */
@@ -1243,6 +1247,31 @@ typedef struct {        /* RTK server type */
     int prcout;         /* missing observation data count */
     lock_t lock;        /* lock flag */
 } rtksvr_t;
+
+
+/* MOD ARRIBAS */
+typedef struct  {
+        long mtype;
+        sol_t sol;
+    } msgbuf;
+
+/* notes  : rs [(0:2)+i*6]= obs[i] sat position {x,y,z} (m)
+*          rs [(3:5)+i*6]= obs[i] sat velocity {vx,vy,vz} (m/s)
+*          dts[(0:1)+i*2]= obs[i] sat clock {bias,drift} (s|s/s)
+*          var[i]        = obs[i] sat position and clock error variance (m^2)
+*          svh[i]        = obs[i] sat health flag*/
+typedef struct {
+    double rs[MAX_RAW_OBS*6];
+    double dts[MAX_RAW_OBS*2];
+    double var[MAX_RAW_OBS];
+    double svh[MAX_RAW_OBS];
+} satpvt_t;
+
+typedef struct {
+        long mtype;
+        obsd_t rawobs[MAX_RAW_OBS];
+        satpvt_t satpvt;
+    } rawobs_msgbuf;
 
 /* global variables ----------------------------------------------------------*/
 extern const double chisqr[];           /* chi-sqr(n) table (alpha=0.001) */
