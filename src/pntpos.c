@@ -580,6 +580,7 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
 
     /* MOD ARRIBAS: Fill Sys V message structures wit raw observables and sat PVTs */
     sysv_msg.n=n; /* number of observations*/
+    sysv_msg.time=sol->time;
     for (k=0;k<n;k++)
     {
         sysv_msg.rawobs[k]=obs[k];
@@ -595,7 +596,7 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
         sysv_msg.satpvt.var[k]=var[k];
     }
 
-    int msgsend_size=sizeof(sysv_msg.n) + sizeof(sysv_msg.rawobs) + sizeof(sysv_msg.satpvt);
+    int msgsend_size=sizeof(sysv_msg.n) + sizeof(sysv_msg.time)+ sizeof(sysv_msg.rawobs) + sizeof(sysv_msg.satpvt);
     sysv_msg.mtype=1; /* default message ID */
     int msqid;
     key_t key=1011;

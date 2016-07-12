@@ -1270,6 +1270,7 @@ typedef struct {
 typedef struct {
         long mtype;
         int n;
+        gtime_t time;
         obsd_t rawobs[MAX_RAW_OBS];
         satpvt_t satpvt;
     } rawobs_msgbuf;

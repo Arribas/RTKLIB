@@ -468,10 +468,10 @@ static void *rtksvrthread(void *arg)
                 
                 /* write solution */
                 writesol(svr,i);
-		/* SEND SOLUTION OVER A MESSAGE QUEUE */
-	        msg_buf.sol=svr->rtk.sol;
-		/* non-blocking Sys V message send */
-		msgsnd(msqid, &msg_buf, msgsend_size, IPC_NOWAIT);
+                /* SEND SOLUTION OVER A MESSAGE QUEUE */
+                    msg_buf.sol=svr->rtk.sol;
+                /* non-blocking Sys V message send */
+                msgsnd(msqid, &msg_buf, msgsend_size, IPC_NOWAIT);
             
             }
             /* if cpu overload, inclement obs outage counter and break */
