@@ -206,7 +206,7 @@ static int rescode(int iter, const obsd_t *obs, int n, const double *rs,
                    const double *dts, const double *vare, const int *svh,
                    const nav_t *nav, const double *x, const prcopt_t *opt,
                    double *v, double *H, double *var, double *azel, int *vsat,
-                   double *resp, int *ns)
+                   double *resp, int *ns, double* corrected_pr)
 {
     double r,dion,dtrp,vmeas,vion,vtrp,rr[3],pos[3],dtr,e[3],P,lam_L1;
     int i,j,nv=0,sys,mask[4]={0};
@@ -254,6 +254,8 @@ static int rescode(int iter, const obsd_t *obs, int n, const double *rs,
         }
         /* pseudorange residual */
         v[nv]=P-(r+dtr-CLIGHT*dts[i*2]+dion+dtrp);
+        /* MOD ARRIBAS */
+        corrected_pr[nv]=P+CLIGHT*dts[i*2]-dion-dtrp;
         
         /* design matrix */
         for (j=0;j<NX;j++) H[j+nv*NX]=j<3?-e[j]:(j==3?1.0:0.0);
@@ -324,13 +326,17 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
     
     v=mat(n+4,1); H=mat(NX,n+4); var=mat(n+4,1);
     
+    /* MOD ARRIBAS */
+    double *corrected_pr;
+    corrected_pr=mat(n+4,1);
+
     for (i=0;i<3;i++) x[i]=sol->rr[i];
     
     for (i=0;i<MAXITR;i++) {
         
         /* pseudorange residuals */
         nv=rescode(i,obs,n,rs,dts,vare,svh,nav,x,opt,v,H,var,azel,vsat,resp,
-                   &ns);
+                   &ns,corrected_pr);
         
         if (nv<NX) {
             sprintf(msg,"lack of valid sats ns=%d",nv);
@@ -375,8 +381,47 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
     }
     if (i>=MAXITR) sprintf(msg,"iteration divergent i=%d",i);
     
+
+
+    /* MOD ARRIBAS: Fill Sys V message structures wit raw observables and sat PVTs */
+    int m;
+    rawobs_msgbuf sysv_msg;
+    sysv_msg.n=n; /* number of observations*/
+    sysv_msg.time=sol->time;
+    for (k=0;k<n;k++)
+    {
+        sysv_msg.rawobs[k]=obs[k];
+        sysv_msg.corrected_pr[k]=corrected_pr[k];
+        for (m=0;m<6;m++)
+        {
+            sysv_msg.satpvt.rs[k*6+m]=rs[k*6+m];
+        }
+        for (m=0;m<2;m++)
+        {
+            sysv_msg.satpvt.dts[k*2+m]=dts[k*2+m];
+        }
+        sysv_msg.satpvt.svh[k]=svh[k];
+        sysv_msg.satpvt.var[k]=var[k];
+    }
+
+    int msgsend_size=sizeof(sysv_msg.n) + sizeof(sysv_msg.time)+ sizeof(sysv_msg.rawobs)+sizeof(sysv_msg.corrected_pr)+ sizeof(sysv_msg.satpvt);
+    sysv_msg.mtype=1; /* default message ID */
+    int msqid;
+    key_t key=1011;
+    if ((msqid = msgget(key, 0644 )) == -1) {
+        perror("msgget");
+    }
+
+    /* SEND SOLUTION OVER A MESSAGE QUEUE */
+    /* non-blocking Sys V message send */
+    msgsnd(msqid, &sysv_msg, msgsend_size, IPC_NOWAIT);
+
+
     free(v); free(H); free(var);
     
+    /*MOD ARRIBAS*/
+    free(corrected_pr);
+
     return 0;
 }
 /* raim fde (failure detection and exclution) -------------------------------*/
@@ -549,9 +594,6 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
     prcopt_t opt_=*opt;
     double *rs,*dts,*var,*azel_,*resp;
     int i,stat,vsat[MAXOBS]={0},svh[MAXOBS];
-
-    int k,m;
-    rawobs_msgbuf sysv_msg;
     
     sol->stat=SOLQ_NONE;
     
@@ -576,37 +618,6 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
     
     /* estimate receiver position with pseudorange */
     stat=estpos(obs,n,rs,dts,var,svh,nav,&opt_,sol,azel_,vsat,resp,msg);
-    
-
-    /* MOD ARRIBAS: Fill Sys V message structures wit raw observables and sat PVTs */
-    sysv_msg.n=n; /* number of observations*/
-    sysv_msg.time=sol->time;
-    for (k=0;k<n;k++)
-    {
-        sysv_msg.rawobs[k]=obs[k];
-        for (m=0;m<6;m++)
-        {
-            sysv_msg.satpvt.rs[k*6+m]=rs[k*6+m];
-        }
-        for (m=0;m<2;m++)
-        {
-            sysv_msg.satpvt.dts[k*2+m]=dts[k*2+m];
-        }
-        sysv_msg.satpvt.svh[k]=svh[k];
-        sysv_msg.satpvt.var[k]=var[k];
-    }
-
-    int msgsend_size=sizeof(sysv_msg.n) + sizeof(sysv_msg.time)+ sizeof(sysv_msg.rawobs) + sizeof(sysv_msg.satpvt);
-    sysv_msg.mtype=1; /* default message ID */
-    int msqid;
-    key_t key=1011;
-    if ((msqid = msgget(key, 0644 )) == -1) {
-        perror("msgget");
-    }
-
-    /* SEND SOLUTION OVER A MESSAGE QUEUE */
-    /* non-blocking Sys V message send */
-    msgsnd(msqid, &sysv_msg, msgsend_size, IPC_NOWAIT);
 
     /* raim fde */
     if (!stat&&n>=6&&opt->posopt[4]) {
