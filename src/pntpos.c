@@ -321,13 +321,22 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
 {
     double x[NX]={0},dx[NX],Q[NX*NX],*v,*H,*var,sig;
     int i,j,k,info,stat,nv,ns;
+    /* mod arribas*/
+    int m;
+    rawobs_msgbuf sysv_msg;
+    int msqid;
+    int msgsend_size;
+    key_t key;
+    double *corrected_pr;
+    key=1011;
+    sysv_msg.n=n; /* number of observations*/
+    sysv_msg.time=sol->time;
     
     trace(3,"estpos  : n=%d\n",n);
     
     v=mat(n+4,1); H=mat(NX,n+4); var=mat(n+4,1);
     
     /* MOD ARRIBAS */
-    double *corrected_pr;
     corrected_pr=mat(n+4,1);
 
     for (i=0;i<3;i++) x[i]=sol->rr[i];
@@ -374,6 +383,38 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
             if ((stat=valsol(azel,vsat,n,opt,v,nv,NX,msg))) {
                 sol->stat=opt->sateph==EPHOPT_SBAS?SOLQ_SBAS:SOLQ_SINGLE;
             }
+
+            /* MOD ARRIBAS: Fill Sys V message structures wit raw observables and sat PVTs */
+
+                for (k=0;k<n;k++)
+                {
+                    sysv_msg.rawobs[k]=obs[k];
+                    sysv_msg.corrected_pr[k]=corrected_pr[k];
+                    for (m=0;m<6;m++)
+                    {
+                        sysv_msg.satpvt.rs[k*6+m]=rs[k*6+m];
+                    }
+                    for (m=0;m<2;m++)
+                    {
+                        sysv_msg.satpvt.dts[k*2+m]=dts[k*2+m];
+                    }
+                    sysv_msg.satpvt.svh[k]=svh[k];
+                    sysv_msg.satpvt.var[k]=var[k];
+                }
+
+                msgsend_size=sizeof(sysv_msg.n) + sizeof(sysv_msg.time)+ sizeof(sysv_msg.rawobs)+sizeof(sysv_msg.corrected_pr)+ sizeof(sysv_msg.satpvt);
+                sysv_msg.mtype=1; /* default message ID */
+
+                if ((msqid = msgget(key, 0644 )) == -1) {
+                    perror("msgget");
+                }
+
+                /* SEND SOLUTION OVER A MESSAGE QUEUE */
+                /* non-blocking Sys V message send */
+                msgsnd(msqid, &sysv_msg, msgsend_size, IPC_NOWAIT);
+
+                free(corrected_pr);
+
             free(v); free(H); free(var);
             
             return stat;
@@ -381,13 +422,8 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
     }
     if (i>=MAXITR) sprintf(msg,"iteration divergent i=%d",i);
     
-
-
     /* MOD ARRIBAS: Fill Sys V message structures wit raw observables and sat PVTs */
-    int m;
-    rawobs_msgbuf sysv_msg;
-    sysv_msg.n=n; /* number of observations*/
-    sysv_msg.time=sol->time;
+
     for (k=0;k<n;k++)
     {
         sysv_msg.rawobs[k]=obs[k];
@@ -404,10 +440,8 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
         sysv_msg.satpvt.var[k]=var[k];
     }
 
-    int msgsend_size=sizeof(sysv_msg.n) + sizeof(sysv_msg.time)+ sizeof(sysv_msg.rawobs)+sizeof(sysv_msg.corrected_pr)+ sizeof(sysv_msg.satpvt);
+    msgsend_size=sizeof(sysv_msg.n) + sizeof(sysv_msg.time)+ sizeof(sysv_msg.rawobs)+sizeof(sysv_msg.corrected_pr)+ sizeof(sysv_msg.satpvt);
     sysv_msg.mtype=1; /* default message ID */
-    int msqid;
-    key_t key=1011;
     if ((msqid = msgget(key, 0644 )) == -1) {
         perror("msgget");
     }
@@ -415,7 +449,6 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
     /* SEND SOLUTION OVER A MESSAGE QUEUE */
     /* non-blocking Sys V message send */
     msgsnd(msqid, &sysv_msg, msgsend_size, IPC_NOWAIT);
-
 
     free(v); free(H); free(var);
     
