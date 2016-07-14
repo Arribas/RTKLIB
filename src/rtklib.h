@@ -1272,7 +1272,8 @@ typedef struct {
         int n;
         gtime_t time;
         obsd_t rawobs[MAX_RAW_OBS];
-        double corrected_pr[MAX_RAW_OBS];
+        double iono_m[MAX_RAW_OBS];
+        double tropo_m[MAX_RAW_OBS];
         satpvt_t satpvt;
     } rawobs_msgbuf;
 

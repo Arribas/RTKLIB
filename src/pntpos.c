@@ -206,7 +206,7 @@ static int rescode(int iter, const obsd_t *obs, int n, const double *rs,
                    const double *dts, const double *vare, const int *svh,
                    const nav_t *nav, const double *x, const prcopt_t *opt,
                    double *v, double *H, double *var, double *azel, int *vsat,
-                   double *resp, int *ns, double* corrected_pr)
+                   double *resp, int *ns, double* tropo_m, double* iono_m)
 {
     double r,dion,dtrp,vmeas,vion,vtrp,rr[3],pos[3],dtr,e[3],P,lam_L1;
     int i,j,nv=0,sys,mask[4]={0};
@@ -255,7 +255,8 @@ static int rescode(int iter, const obsd_t *obs, int n, const double *rs,
         /* pseudorange residual */
         v[nv]=P-(r+dtr-CLIGHT*dts[i*2]+dion+dtrp);
         /* MOD ARRIBAS */
-        corrected_pr[nv]=P+CLIGHT*dts[i*2]-dion-dtrp;
+        tropo_m[nv]=dtrp;
+        iono_m[nv]=dion;
         
         /* design matrix */
         for (j=0;j<NX;j++) H[j+nv*NX]=j<3?-e[j]:(j==3?1.0:0.0);
@@ -327,7 +328,7 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
     int msqid;
     int msgsend_size;
     key_t key;
-    double *corrected_pr;
+    double *tropo_m,*iono_m;
     key=1011;
     sysv_msg.n=n; /* number of observations*/
     sysv_msg.time=sol->time;
@@ -337,7 +338,8 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
     v=mat(n+4,1); H=mat(NX,n+4); var=mat(n+4,1);
     
     /* MOD ARRIBAS */
-    corrected_pr=mat(n+4,1);
+    tropo_m=mat(n+4,1);
+    iono_m=mat(n+4,1);
 
     for (i=0;i<3;i++) x[i]=sol->rr[i];
     
@@ -345,7 +347,7 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
         
         /* pseudorange residuals */
         nv=rescode(i,obs,n,rs,dts,vare,svh,nav,x,opt,v,H,var,azel,vsat,resp,
-                   &ns,corrected_pr);
+                   &ns,tropo_m,iono_m);
         
         if (nv<NX) {
             sprintf(msg,"lack of valid sats ns=%d",nv);
@@ -389,7 +391,8 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
                 for (k=0;k<n;k++)
                 {
                     sysv_msg.rawobs[k]=obs[k];
-                    sysv_msg.corrected_pr[k]=corrected_pr[k];
+                    sysv_msg.tropo_m[k]=tropo_m[k];
+                    sysv_msg.iono_m[k]=iono_m[k];
                     for (m=0;m<6;m++)
                     {
                         sysv_msg.satpvt.rs[k*6+m]=rs[k*6+m];
@@ -402,7 +405,7 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
                     sysv_msg.satpvt.var[k]=var[k];
                 }
 
-                msgsend_size=sizeof(sysv_msg.n) + sizeof(sysv_msg.time)+ sizeof(sysv_msg.rawobs)+sizeof(sysv_msg.corrected_pr)+ sizeof(sysv_msg.satpvt);
+                msgsend_size=sizeof(sysv_msg.n) + sizeof(sysv_msg.time)+ sizeof(sysv_msg.rawobs)+sizeof(sysv_msg.iono_m)+sizeof(sysv_msg.tropo_m)+ sizeof(sysv_msg.satpvt);
                 sysv_msg.mtype=1; /* default message ID */
 
                 if ((msqid = msgget(key, 0644 )) == -1) {
@@ -413,7 +416,8 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
                 /* non-blocking Sys V message send */
                 msgsnd(msqid, &sysv_msg, msgsend_size, IPC_NOWAIT);
 
-                free(corrected_pr);
+                free(tropo_m);
+                free(iono_m);
 
             free(v); free(H); free(var);
             
@@ -427,7 +431,8 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
     for (k=0;k<n;k++)
     {
         sysv_msg.rawobs[k]=obs[k];
-        sysv_msg.corrected_pr[k]=corrected_pr[k];
+        sysv_msg.tropo_m[k]=tropo_m[k];
+        sysv_msg.iono_m[k]=iono_m[k];
         for (m=0;m<6;m++)
         {
             sysv_msg.satpvt.rs[k*6+m]=rs[k*6+m];
@@ -440,8 +445,9 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
         sysv_msg.satpvt.var[k]=var[k];
     }
 
-    msgsend_size=sizeof(sysv_msg.n) + sizeof(sysv_msg.time)+ sizeof(sysv_msg.rawobs)+sizeof(sysv_msg.corrected_pr)+ sizeof(sysv_msg.satpvt);
+    msgsend_size=sizeof(sysv_msg.n) + sizeof(sysv_msg.time)+ sizeof(sysv_msg.rawobs)+sizeof(sysv_msg.iono_m)+sizeof(sysv_msg.tropo_m)+ sizeof(sysv_msg.satpvt);
     sysv_msg.mtype=1; /* default message ID */
+
     if ((msqid = msgget(key, 0644 )) == -1) {
         perror("msgget");
     }
@@ -453,7 +459,8 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
     free(v); free(H); free(var);
     
     /*MOD ARRIBAS*/
-    free(corrected_pr);
+    free(tropo_m);
+    free(iono_m);
 
     return 0;
 }
