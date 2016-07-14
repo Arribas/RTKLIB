@@ -735,7 +735,7 @@ extern double *mat(int n, int m)
     double *p;
     
     if (n<=0||m<=0) return NULL;
-    if (!(p=(double *)malloc(sizeof(double)*n*m))) {
+    if (!(p=(double *)calloc(n*m,sizeof(double)))) {
         fatalerr("matrix memory allocation error: n=%d,m=%d\n",n,m);
     }
     return p;
