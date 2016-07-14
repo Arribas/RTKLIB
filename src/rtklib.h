@@ -1274,6 +1274,7 @@ typedef struct {
         obsd_t rawobs[MAX_RAW_OBS];
         double iono_m[MAX_RAW_OBS];
         double tropo_m[MAX_RAW_OBS];
+        double pr_corrected_code_bias[MAX_RAW_OBS];
         satpvt_t satpvt;
     } rawobs_msgbuf;
 
