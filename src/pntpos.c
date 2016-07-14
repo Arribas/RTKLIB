@@ -113,11 +113,14 @@ static double prange(const obsd_t *obs, const nav_t *nav, const double *azel,
         if (P1==0.0) return 0.0;
         if (obs->code[i]==CODE_L1C) P1+=P1_C1; /* C1->P1 */
         PC=P1-P1_P2/(1.0-gamma);
+	/*printf("P1_C1=%f P1_P2=%f \n",P1_C1,P1_P2);*/
     }
     if (opt->sateph==EPHOPT_SBAS) PC-=P1_C1; /* sbas clock based C1 */
     
     *var=SQR(ERR_CBIAS);
     
+    /*printf("obs p0=%f PC=%f \n",obs->P[0],PC);*/
+
     return PC;
 }
 /* ionospheric correction ------------------------------------------------------
@@ -257,9 +260,9 @@ static int rescode(int iter, const obsd_t *obs, int n, const double *rs,
         /* pseudorange residual */
         v[nv]=P-(r+dtr-CLIGHT*dts[i*2]+dion+dtrp);
         /* MOD ARRIBAS */
-        pr_corrected_code_bias[nv]=P;
-        tropo_m[nv]=dtrp;
-        iono_m[nv]=dion;
+        pr_corrected_code_bias[i]=P;
+        tropo_m[i]=dtrp;
+        iono_m[i]=dion;
         
         /* design matrix */
         for (j=0;j<NX;j++) H[j+nv*NX]=j<3?-e[j]:(j==3?1.0:0.0);
