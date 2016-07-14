@@ -210,7 +210,8 @@ static int rescode(int iter, const obsd_t *obs, int n, const double *rs,
 {
     double r,dion,dtrp,vmeas,vion,vtrp,rr[3],pos[3],dtr,e[3],P,lam_L1;
     int i,j,nv=0,sys,mask[4]={0};
-    
+    dion=0.0;
+    dtrp=0.0;
     trace(3,"resprng : n=%d\n",n);
     
     for (i=0;i<3;i++) rr[i]=x[i]; dtr=x[3];
