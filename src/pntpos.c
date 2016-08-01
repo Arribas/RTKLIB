@@ -337,7 +337,8 @@ static int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
     double *tropo_m,*iono_m, *pr_corrected_code_bias;
     key=1011;
     sysv_msg.n=n; /* number of observations*/
-    sysv_msg.time=sol->time;
+    /*Report time in UTC for the hybridization. System time is synchronized in UTC*/
+    sysv_msg.time=gpst2utc(sol->time);
     
     trace(3,"estpos  : n=%d\n",n);
     

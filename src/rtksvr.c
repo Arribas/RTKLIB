@@ -469,7 +469,9 @@ static void *rtksvrthread(void *arg)
                 /* write solution */
                 writesol(svr,i);
                 /* SEND SOLUTION OVER A MESSAGE QUEUE */
-                    msg_buf.sol=svr->rtk.sol;
+                 msg_buf.sol=svr->rtk.sol;
+		 /* convert PV solution time from GPST to UTC */
+	         msg_buf.sol.time=gpst2utc(msg_buf.sol.time);
                 /* non-blocking Sys V message send */
                 msgsnd(msqid, &msg_buf, msgsend_size, IPC_NOWAIT);
             
